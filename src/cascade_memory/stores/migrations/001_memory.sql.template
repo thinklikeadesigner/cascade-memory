@@ -84,7 +84,7 @@ LANGUAGE sql STABLE AS $$
       AND m.status = 'active'
       AND m.embedding IS NOT NULL
       AND (1 - (m.embedding <=> query_embedding)) > match_threshold
-    ORDER BY (1 - (m.embedding <=> query_embedding)) * m.decay_score * m.confidence DESC
+    ORDER BY (1 - (m.embedding <=> query_embedding)) * (0.3 + 0.7 * m.decay_score) * m.confidence DESC
     LIMIT match_count;
 $$;
 

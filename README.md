@@ -7,7 +7,7 @@ Pluggable memory system for AI agents — core memory, archival search with deca
 - **Dual-layer memory**: persistent core profile + searchable archival memory with vector embeddings
 - **Multi-tenant**: every operation is tenant-scoped, with isolation enforced at the store level
 - **Pluggable backends**: protocol-based design — swap stores, embedders, and extractors independently
-- **Semantic recall**: cosine similarity search ranked by `similarity * decay * confidence`
+- **Semantic recall**: cosine similarity search ranked by `similarity * (0.3 + 0.7 * decay) * confidence`
 - **Time-based decay**: memories fade unless accessed — configurable decay rate
 - **Memory linking**: Zettelkasten-style connections between memories
 - **LLM extraction**: automatically extract facts from conversations (optional)
@@ -16,16 +16,16 @@ Pluggable memory system for AI agents — core memory, archival search with deca
 ## Install
 
 ```bash
-pip install cascade-memory
+pip install cascade-memory @ git+https://github.com/thinklikeadesigner/cascade-memory.git
 ```
 
 With optional backends:
 
 ```bash
-pip install cascade-memory[supabase]    # Supabase/pgvector store
-pip install cascade-memory[gemini]      # Google Gemini embeddings
-pip install cascade-memory[anthropic]   # Claude-based memory extraction
-pip install cascade-memory[all]         # everything
+pip install "cascade-memory[supabase] @ git+https://github.com/thinklikeadesigner/cascade-memory.git"
+pip install "cascade-memory[gemini] @ git+https://github.com/thinklikeadesigner/cascade-memory.git"
+pip install "cascade-memory[anthropic] @ git+https://github.com/thinklikeadesigner/cascade-memory.git"
+pip install "cascade-memory[all] @ git+https://github.com/thinklikeadesigner/cascade-memory.git"
 ```
 
 ## Quick Start
@@ -130,7 +130,7 @@ graph LR
     APPEND[append] --> CORE
     REPLACE[replace] --> CORE
 
-    ARCH -->|search ranked by<br/>similarity × decay × confidence| RESULTS[SearchResults]
+    ARCH -->|search ranked by<br/>similarity × attenuated_decay × confidence| RESULTS[SearchResults]
 ```
 
 Everything is injected via protocols. No concrete backend is required at import time.
@@ -193,11 +193,13 @@ related = await tenant.get_related(mid1)
 
 ### Search Ranking
 
-Results are ranked by: `similarity * decay_score * confidence`
+Results are ranked by: `similarity * (0.3 + 0.7 * decay_score) * confidence`
 
 - **similarity**: cosine similarity between query embedding and memory embedding
 - **decay_score**: starts at 1.0, decreases over time unless the memory is accessed
 - **confidence**: set at save time (default 1.0), useful for extracted memories with varying certainty
+
+The attenuated decay formula `(0.3 + 0.7 * decay_score)` ensures old memories are deprioritized but never fully killed. A fully decayed memory (decay_score=0) still retains 30% of its ranking weight, so a highly relevant old memory can still surface over a weakly relevant recent one.
 
 ### Decay
 
@@ -351,7 +353,7 @@ MemoryRecord(
 SearchResult(
     memory=MemoryRecord(...),
     similarity=0.85,                 # cosine similarity
-    rank_score=0.82,                 # similarity * decay * confidence
+    rank_score=0.85,                 # similarity * (0.3 + 0.7*decay) * confidence
 )
 
 # Connections between memories
@@ -382,7 +384,7 @@ By default, embedding failures are non-fatal — memories save without vectors. 
 
 ## Supabase Schema
 
-If using `SupabaseStore`, apply this schema to your database:
+If using `SupabaseStore`, apply this schema to your database. Replace `DIMS` with your embedder's output dimensions (e.g., 768 for Gemini, 1536 for OpenAI `text-embedding-3-small`).
 
 ```sql
 -- Enable pgvector
@@ -406,7 +408,7 @@ create table memories (
     confidence float default 1.0,
     decay_score float default 1.0,
     status text default 'active',
-    embedding vector(768),
+    embedding vector(DIMS),  -- match your embedder's dimensions
     superseded_by uuid references memories(id),
     source_id text,
     created_at timestamptz default now(),
@@ -428,14 +430,14 @@ create table memory_links (
 
 -- Semantic search function
 create or replace function match_memories(
-    query_embedding vector(768),
+    query_embedding vector(DIMS),
     match_tenant_id text,
     match_count int default 5,
     match_threshold float default 0.5
 ) returns table (
     id uuid, content text, memory_type text, tags text[],
     confidence float, decay_score float, status text,
-    embedding vector(768), superseded_by uuid, source_id text,
+    embedding vector(DIMS), superseded_by uuid, source_id text,
     created_at timestamptz, last_accessed_at timestamptz,
     last_confirmed_at timestamptz, similarity float
 ) language plpgsql as $$
@@ -452,7 +454,7 @@ begin
       and m.status = 'active'
       and m.embedding is not null
       and 1 - (m.embedding <=> query_embedding) > match_threshold
-    order by m.embedding <=> query_embedding
+    order by (1 - (m.embedding <=> query_embedding)) * (0.3 + 0.7 * m.decay_score) * m.confidence desc
     limit match_count;
 end;
 $$;
@@ -476,10 +478,12 @@ end;
 $$;
 ```
 
+> **Note:** The production migration template at `src/cascade_memory/stores/migrations/001_memory.sql.template` uses `{embedding_dimensions}` as a placeholder and includes additional indexes and constraints. Use it for automated deployments.
+
 ## Testing
 
 ```bash
-pip install cascade-memory[dev]
+pip install "cascade-memory[dev] @ git+https://github.com/thinklikeadesigner/cascade-memory.git"
 pytest
 ```
 

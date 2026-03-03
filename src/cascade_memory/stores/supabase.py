@@ -183,7 +183,7 @@ class SupabaseStore:
                     decay_score=r.get("decay_score", 1.0),
                 ),
                 similarity=r["similarity"],
-                rank_score=r["similarity"] * r.get("decay_score", 1.0) * r.get("confidence", 1.0),
+                rank_score=r["similarity"] * (0.3 + 0.7 * r.get("decay_score", 1.0)) * r.get("confidence", 1.0),
             )
             for r in result.data
         ]

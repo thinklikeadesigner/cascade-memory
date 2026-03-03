@@ -118,7 +118,7 @@ class InMemoryStore:
             sim = _cosine_similarity(embedding, m.embedding)
             if sim < threshold:
                 continue
-            rank = sim * m.decay_score * m.confidence
+            rank = sim * (0.3 + 0.7 * m.decay_score) * m.confidence
             results.append(SearchResult(memory=m, similarity=sim, rank_score=rank))
         results.sort(key=lambda r: r.rank_score, reverse=True)
         return results[:count]
