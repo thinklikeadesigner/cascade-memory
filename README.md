@@ -16,16 +16,15 @@ Pluggable memory system for AI agents — core memory, archival search with deca
 ## Install
 
 ```bash
-pip install cascade-memory @ git+https://github.com/thinklikeadesigner/cascade-memory.git
+pip install "git+https://github.com/thinklikeadesigner/cascade-memory.git"
 ```
 
-With optional backends:
+Optional backends — install as needed:
 
 ```bash
-pip install "cascade-memory[supabase] @ git+https://github.com/thinklikeadesigner/cascade-memory.git"
-pip install "cascade-memory[gemini] @ git+https://github.com/thinklikeadesigner/cascade-memory.git"
-pip install "cascade-memory[anthropic] @ git+https://github.com/thinklikeadesigner/cascade-memory.git"
-pip install "cascade-memory[all] @ git+https://github.com/thinklikeadesigner/cascade-memory.git"
+pip install supabase      # SupabaseStore (pgvector)
+pip install google-genai  # GeminiEmbedder
+pip install anthropic     # AnthropicExtractor
 ```
 
 ## Quick Start
@@ -483,7 +482,9 @@ $$;
 ## Testing
 
 ```bash
-pip install "cascade-memory[dev] @ git+https://github.com/thinklikeadesigner/cascade-memory.git"
+git clone https://github.com/thinklikeadesigner/cascade-memory.git
+cd cascade-memory
+pip install -e ".[dev]"
 pytest
 ```
 
